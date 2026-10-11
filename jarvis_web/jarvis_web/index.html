@@ -1,0 +1,1324 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="description" content="error">
+<title>error</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;500&display=swap">
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+/* Layout: one full-screen instrument — particle atom canvas behind, HUD on top, transcript + input dock at the bottom */
+:root {
+  --bg: #02050c;
+  --fg: #d4ecff;
+  --dim: #5d83ad;
+  --accent: #6ab8ff;
+  --glass: rgba(8, 20, 38, 0.78);
+  --line: rgba(106, 184, 255, 0.26);
+  --warn: #ff9b78;
+  --hud: "Chakra Petch", ui-monospace, "SF Mono", Menlo, monospace;
+  --body: "IBM Plex Sans KR", -apple-system, "Apple SD Gothic Neo", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--body);
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+#atom {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%;
+  touch-action: manipulation;
+  display: block;
+}
+.hud {
+  position: fixed; left: 0; right: 0; top: 0;
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 10px;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-family: var(--hud); font-size: 13px; letter-spacing: 0.14em;
+  color: var(--dim); pointer-events: none;
+}
+.hud .brand { color: var(--fg); }
+.hud .sep { opacity: 0.5; }
+#mode { color: var(--accent); }
+.hud .spacer { flex: 1; }
+.hud button {
+  pointer-events: auto;
+  font: inherit; letter-spacing: 0.1em; font-size: 11px;
+  color: var(--dim); background: transparent;
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 6px 10px; cursor: pointer;
+}
+.hud button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+.hud button:focus-visible, .dock button:focus-visible, .dock input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#hint {
+  position: fixed; left: 16px; right: 16px; top: 61%;
+  text-align: center; font-family: var(--hud); font-size: 13px;
+  letter-spacing: 0.22em; color: var(--dim); pointer-events: none;
+  transition: opacity 0.6s;
+}
+.panel {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  padding: 0 16px calc(env(safe-area-inset-bottom, 0px) + 14px);
+  display: flex; flex-direction: column; gap: 10px;
+  background: linear-gradient(to top, var(--bg) 55%, rgba(2, 5, 12, 0));
+  padding-top: 40px;
+}
+.transcript { display: flex; flex-direction: column; gap: 6px; max-height: 34vh; overflow-y: auto; min-width: 0; }
+#you { color: var(--dim); font-size: 14px; margin: 0; }
+#ai { color: var(--fg); font-size: 17px; line-height: 1.5; margin: 0; white-space: pre-wrap; max-width: 65ch; }
+#note { color: var(--warn); font-size: 13px; margin: 0; }
+.dock { display: flex; gap: 8px; align-items: center; }
+.dock input {
+  flex: 1; min-width: 0;
+  font: 16px var(--body); color: var(--fg);
+  background: var(--glass); border: 1px solid var(--line); border-radius: 14px;
+  padding: 12px 14px;
+}
+.dock input::placeholder { color: var(--dim); }
+.dock button {
+  font-family: var(--hud); font-size: 13px; letter-spacing: 0.12em;
+  color: var(--bg); background: var(--accent); border: 0; border-radius: 14px;
+  padding: 12px 16px; cursor: pointer;
+}
+.dock button:disabled { opacity: 0.45; }
+.dock .stop { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+
+/* ---- side data panels ---- */
+.side {
+  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 58px); bottom: 168px;
+  width: min(84vw, 340px); z-index: 5;
+  display: flex; flex-direction: column; gap: 8px; min-width: 0;
+  transition: transform 0.35s ease;
+}
+.side.left { left: 12px; transform: translateX(calc(-100% - 24px)); }
+.side.right { right: 12px; transform: translateX(calc(100% + 24px)); }
+.side.open { transform: none; }
+.side-head {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--hud); font-size: 11px; letter-spacing: 0.18em; color: var(--dim);
+}
+.side-head .grow { flex: 1; }
+.side-head button, .card-x {
+  font: 11px var(--hud); letter-spacing: 0.1em; color: var(--dim);
+  background: transparent; border: 1px solid var(--line); border-radius: 999px;
+  padding: 4px 9px; cursor: pointer;
+}
+.stack { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; min-height: 0; padding-bottom: 6px; }
+.card {
+  background: var(--glass); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 12px 10px; min-width: 0;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  animation: cardIn 0.4s ease both;
+}
+@keyframes cardIn { from { opacity: 0.2; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.card-top { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+.card-kind { font: 10px var(--hud); letter-spacing: 0.2em; color: var(--accent); }
+.card-title { font-size: 14px; font-weight: 500; margin: 2px 0 0; text-wrap: balance; }
+.card-top .grow { flex: 1; min-width: 0; }
+.card-x { padding: 2px 8px; }
+.tbl-wrap { overflow-x: auto; }
+.card table { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.card th { text-align: left; font: 10px var(--hud); letter-spacing: 0.12em; color: var(--dim); padding: 4px 6px 6px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.card td { padding: 5px 6px 5px 0; border-bottom: 1px solid rgba(106,184,255,0.1); vertical-align: top; }
+.card .total { margin-top: 8px; text-align: right; font: 13px var(--hud); color: var(--accent); }
+.steps { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.step { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; }
+.step .lbl { color: var(--dim); }
+.step .expr { grid-column: 1 / -1; font-family: var(--hud); font-size: 12px; color: var(--fg); overflow-wrap: anywhere; }
+.step .val { font-family: var(--hud); color: var(--fg); font-variant-numeric: tabular-nums; }
+.result { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; }
+.result .val { font: 600 16px var(--hud); color: var(--accent); }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 8px; }
+.metric .m-l { font: 10px var(--hud); letter-spacing: 0.12em; color: var(--dim); }
+.metric .m-v { font: 600 18px var(--hud); color: var(--fg); font-variant-numeric: tabular-nums; }
+.metric .m-u { font-size: 11px; color: var(--dim); margin-left: 3px; }
+.card ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column; gap: 3px; }
+.diagram { color: var(--fg); }
+.diagram svg { width: 100%; height: auto; max-height: 260px; display: block; }
+.card img { width: 100%; border-radius: 8px; display: block; }
+.caption { font-size: 11.5px; color: var(--dim); margin: 6px 0 0; }
+.model3d {
+  height: 230px; position: relative; border-radius: 8px; overflow: hidden;
+  background: radial-gradient(circle at 50% 40%, rgba(40, 90, 160, 0.35), rgba(2, 5, 12, 0.2) 70%);
+}
+.model3d canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+.model3d img { width: 100%; height: 100%; object-fit: contain; border-radius: 0; }
+.model3d .caption { position: absolute; left: 10px; top: 8px; }
+.card-tools { display: flex; gap: 6px; }
+.card.expanded {
+  position: fixed; z-index: 30;
+  top: calc(env(safe-area-inset-top, 0px) + 56px); left: 10px; right: 10px; bottom: 170px;
+  display: flex; flex-direction: column; background: rgba(4, 12, 26, 0.94);
+}
+.card.expanded .model3d { flex: 1; height: auto; }
+.qlist { display: flex; flex-direction: column; gap: 8px; }
+.qbtn {
+  display: flex; flex-direction: column; gap: 2px; text-decoration: none;
+  border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; color: var(--fg);
+}
+.qbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.qbtn .q-l { font: 10px var(--hud); letter-spacing: 0.16em; color: var(--accent); }
+.qbtn .q-t { font-size: 13px; overflow-wrap: anywhere; }
+.edge-tab {
+  position: fixed; top: 46%; z-index: 4;
+  writing-mode: vertical-rl; font: 11px var(--hud); letter-spacing: 0.22em;
+  color: var(--accent); background: var(--glass); border: 1px solid var(--line);
+  padding: 12px 6px; cursor: pointer;
+}
+.edge-tab.left { left: 0; border-left: 0; border-radius: 0 10px 10px 0; transform: rotate(180deg); }
+.edge-tab.right { right: 0; border-right: 0; border-radius: 0 10px 10px 0; }
+.edge-tab.left { border-radius: 0 10px 10px 0; }
+.edge-tab.pulse { animation: tabPulse 1.2s ease 3; }
+@keyframes tabPulse { 50% { color: var(--bg); background: var(--accent); } }
+.dock .attach { background: transparent; color: var(--accent); border: 1px solid var(--line); padding: 12px 12px; }
+#pending { font-size: 12px; color: var(--accent); margin: 0; }
+@media (min-width: 900px) {
+  .side { width: 300px; bottom: 20px; }
+  .side.left, .side.right { transform: none; }
+  .side.empty { display: none; }
+  .edge-tab { display: none; }
+  .side-head .close-side { display: none; }
+  .panel { padding-left: 336px; padding-right: 336px; }
+}
+@media (prefers-reduced-motion: reduce) { .side, .card, .edge-tab.pulse { transition: none; animation: none; } }
+
+@media (max-width: 480px) {
+  .hud { font-size: 12px; letter-spacing: 0.08em; gap: 6px; flex-wrap: nowrap; }
+  .hud .sep { display: none; }
+  .hud button { padding: 5px 8px; font-size: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { #hint { transition: none; } }
+
+/* ---- boot disguise: white "(error)" page ---- */
+#boot {
+  position: fixed; inset: 0; z-index: 100; background: #ffffff;
+  display: grid; place-items: center; cursor: default;
+  clip-path: circle(150% at 50% 42%);
+  transition: clip-path 0.95s cubic-bezier(0.7, 0, 0.3, 1), background-color 0.95s ease;
+  -webkit-user-select: none; user-select: none; touch-action: manipulation;
+}
+#boot .err { font: 15px ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: #111111; letter-spacing: 0.02em; }
+#boot.glitch .err { animation: glitch 0.6s steps(2, end) both; }
+@keyframes glitch {
+  0% { transform: none; text-shadow: none; opacity: 1; }
+  20% { transform: translate(-2px, 1px); text-shadow: 2px 0 #ff2a2a, -2px 0 #2a8bff; }
+  40% { transform: translate(3px, -1px) skewX(10deg); text-shadow: -3px 0 #ff2a2a, 3px 0 #2a8bff; opacity: 0.6; }
+  60% { transform: translate(-1px, 0); opacity: 1; }
+  80% { text-shadow: 5px 0 #2a8bff; opacity: 0.35; }
+  100% { transform: scaleX(1.8); opacity: 0; }
+}
+#boot.collapse { clip-path: circle(0% at 50% 42%); background-color: #cfe6ff; }
+#boot.gone { display: none; }
+#dbg { position: fixed; left: 8px; bottom: 8px; font: 11px ui-monospace, monospace; color: #9a9a9a; }
+@media (prefers-reduced-motion: reduce) { #boot { transition-duration: 0.01s; } #boot.glitch .err { animation: none; } }
+/* ---- settings ---- */
+.settings {
+  position: fixed; z-index: 60; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(92vw, 420px); max-height: 86vh; overflow-y: auto;
+  background: rgba(6, 16, 32, 0.97); border: 1px solid var(--line); border-radius: 16px;
+  padding: 18px 18px 14px; display: flex; flex-direction: column; gap: 12px;
+}
+.settings h2 { margin: 0; font: 600 14px var(--hud); letter-spacing: 0.2em; color: var(--accent); }
+.settings label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--dim); }
+.settings input, .settings select {
+  font: 16px var(--body); color: var(--fg); background: var(--glass);
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0;
+}
+.settings .help { margin: 0; font-size: 12px; color: var(--dim); line-height: 1.5; }
+.settings .help a { color: var(--accent); }
+.settings .row { display: flex; gap: 8px; }
+.settings .row button { flex: 1; font: 13px var(--hud); letter-spacing: 0.12em; border-radius: 10px; padding: 11px; cursor: pointer; border: 0; background: var(--accent); color: var(--bg); }
+.settings .row button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+.mem { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.mem-head { display: flex; justify-content: space-between; font: 12px var(--hud); letter-spacing: 0.16em; color: var(--accent); }
+#memList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 30vh; overflow-y: auto; }
+#memList li { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--fg); }
+#memList li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+#memList li button { font: 11px var(--hud); color: var(--dim); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; cursor: pointer; }
+#memList .empty { color: var(--dim); }
+.settings textarea { font: 13px var(--body); color: var(--fg); background: var(--glass); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; resize: vertical; }
+.mem .row button { font-size: 11px; padding: 9px 6px; }
+.dock .talk { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+</style>
+</head>
+<body>
+<canvas id="atom" aria-label="JARVIS 코어"></canvas>
+
+<header class="hud">
+  <span class="brand">J.A.R.V.I.S</span><span class="sep">//</span><span id="mode">STANDBY</span>
+  <span class="spacer"></span>
+  <button id="setBtn" type="button" aria-pressed="false">SET</button>
+  <button id="voiceBtn" type="button" aria-pressed="true">VOICE ON</button>
+</header>
+
+<div id="hint">박수 두 번</div>
+
+<aside class="side left empty" id="sideL" aria-label="부품과 사양">
+  <div class="side-head"><span>PARTS / SPECS</span><span class="grow"></span>
+    <button type="button" data-clear="L">CLEAR</button><button type="button" class="close-side" data-close="L">CLOSE</button></div>
+  <div class="stack" id="stackL"></div>
+</aside>
+<aside class="side right empty" id="sideR" aria-label="계산과 도식">
+  <div class="side-head"><span>CALC / VISUAL</span><span class="grow"></span>
+    <button type="button" data-clear="R">CLEAR</button><button type="button" class="close-side" data-close="R">CLOSE</button></div>
+  <div class="stack" id="stackR"></div>
+</aside>
+<button class="edge-tab left" id="tabL" type="button" hidden>DATA</button>
+<button class="edge-tab right" id="tabR" type="button" hidden>CALC</button>
+
+<section class="panel">
+  <div class="transcript" aria-live="polite">
+    <p id="you"></p>
+    <p id="ai"></p>
+    <p id="note"></p>
+    <p id="pending"></p>
+  </div>
+  <form class="dock" id="bar" autocomplete="off">
+    <button id="attachBtn" class="attach" type="button" aria-label="사진 첨부">IMG</button>
+    <button id="talkBtn" class="talk" type="button" hidden>TALK</button>
+    <input id="photo" type="file" accept="image/*" hidden>
+    <input id="msg" type="text" enterkeyhint="send" placeholder="말하거나 입력하세요" aria-label="JARVIS에게 보낼 메시지">
+    <button id="sendBtn" type="submit">SEND</button>
+    <button id="stopBtn" class="stop" type="button" hidden>STOP</button>
+  </form>
+</section>
+
+
+<section id="settings" class="settings" hidden aria-label="설정">
+  <h2>SETTINGS</h2>
+  <label>AI 엔진
+    <select id="sProvider"><option value="gemini">Gemini (무료 키)</option><option value="claude">Claude (유료 키)</option></select>
+  </label>
+  <label>API 키
+    <input id="sKey" type="password" autocomplete="off" spellcheck="false" placeholder="키를 붙여 넣으세요">
+  </label>
+  <p class="help" id="sHelp"></p>
+  <label>모델 (비우면 자동)
+    <input id="sModel" type="text" autocomplete="off" spellcheck="false" placeholder="자동">
+  </label>
+  <label>음성 인식 언어
+    <select id="sLang"><option value="ko-KR">한국어</option><option value="en-US">English</option></select>
+  </label>
+  <label>박수 감도
+    <select id="sClap"><option value="0.3">낮음 (시끄러운 곳)</option><option value="0.2">보통</option><option value="0.12">높음 (작은 박수)</option></select>
+  </label>
+  <label>웹 검색 (뉴스·최신 정보)
+    <select id="sWeb"><option value="1">사용</option><option value="0">사용 안 함</option></select>
+  </label>
+  <label>기본 위치 (날씨용, 위치 권한이 없을 때)
+    <input id="sCity" type="text" autocomplete="off" placeholder="예: Berlin">
+  </label>
+  <div class="mem">
+    <div class="mem-head"><span>MEMORY</span><span id="memCount"></span></div>
+    <ul id="memList"></ul>
+    <div class="row">
+      <button type="button" id="memExport" class="ghost">복사(백업)</button>
+      <button type="button" id="memImport" class="ghost">붙여넣기(복원)</button>
+      <button type="button" id="memClear" class="ghost">모두 지우기</button>
+    </div>
+    <textarea id="memBox" rows="3" placeholder="백업한 기억 데이터를 여기에 붙여 넣고 '붙여넣기(복원)'를 누르세요" hidden></textarea>
+  </div>
+  <div class="row"><button type="button" id="sSave">SAVE</button><button type="button" id="sClose" class="ghost">CLOSE</button></div>
+  <p class="help">키는 이 기기의 브라우저에만 저장되고, GitHub나 다른 곳으로 올라가지 않습니다.</p>
+</section>
+
+<div id="boot" aria-label="error"><span class="err">(error)</span><span id="dbg" hidden></span></div>
+
+<script>
+(() => {
+  // ------------------------------------------------------------------ config
+  const USER = "Jeongwoo";
+  const GREETING = "Hello Jeongwoo, what are we working on today?";
+  const FAREWELL_EN = "Going to standby. Clap twice when you need me.";
+  const FAREWELL_KO = "대기 모드로 전환합니다. 필요하시면 박수 두 번 쳐 주세요.";
+  const SLEEP_RE = /\b(goodbye|good bye|go to sleep|standby|shut down)\b|잘\s?가|대기|그만|종료/i;
+  const CONTEXT = `Known context about ${USER}'s current project (use when relevant, do not recite unprompted):
+- Hybrid 5-axis + gripper robot arm v0.1, all PETG, budget about 100 EUR.
+- J1 base yaw: NEMA17 + printed spur gears 5:1 (m1.25, 12T->60T). J2 shoulder and J3 elbow: NEMA17 + printed gears 6:1 (m1.5, 12T->72T); the elbow motor sits in the turret and drives the forearm through a parallelogram push rod (crank radius 45 mm).
+- J4 wrist pitch MG996R, J5 wrist roll MG90S, gripper MG90S with two m1 22T geared jaws.
+- Shoulder axis height 142 mm, upper arm 140 mm, forearm 140 mm, wrist to gripper tip about 130 mm, reach about 410 mm.
+- Bearings: 7x 608ZZ, 2x 625ZZ, 6 mm ball race in the base. Controller: Arduino Uno + CNC Shield V3, 12V 5A supply, separate 5-6V servo supply.
+- Worst-case static torque: shoulder 0.61 Nm, elbow 0.49 Nm (100 g payload); available about 1.4 Nm moving, 2.3 Nm holding per joint.`;
+  const RULES = `You are JARVIS, the personal AI assistant of ${USER}, an engineer working on robotics, logistics automation and software. Tone: calm, precise, slightly dry, like a classic sci-fi interface, grounded in real engineering and physics. If an idea has a flaw, say so politely and directly, with the reason.
+
+${CONTEXT}
+
+Reply with ONLY one JSON object, no other text:
+{"say": string, "panels": [panel, ...]}
+- "say": what you speak aloud. 1 to 3 short sentences, plain text, no markdown, no symbols that sound odd when read aloud. Same language the user wrote (Korean or English).
+- "panels": 0 to 3 visual cards shown at the screen edges. Use them whenever there are parts, numbers, steps or a shape to show; use [] for small talk. Details go in panels, the voice only summarizes.
+Panel types (all text fields plain strings, same language as "say"):
+  {"type":"parts","side":"left","title":"...","columns":["Part","Spec","Qty","Price"],"rows":[["NEMA17","42x42x40, 45Ncm","3","~25 EUR"]],"total":"~95 EUR"}
+  {"type":"metrics","side":"left","title":"...","items":[{"label":"Reach","value":"410","unit":"mm"}]}
+  {"type":"calc","side":"right","title":"...","steps":[{"label":"Arm moment","expr":"0.355 kg x 0.15 m x 9.81","value":"0.52 Nm"}],"result":{"label":"Required torque","value":"0.61 Nm"}}
+  {"type":"note","side":"right","title":"...","bullets":["...","..."]}
+  {"type":"diagram","side":"right","title":"...","svg":"<svg viewBox='0 0 300 200' xmlns='http://www.w3.org/2000/svg'>...</svg>","caption":"..."}
+  {"type":"model","side":"right","title":"...","asset":"arm","pose":{"q1":0,"q2":30,"q3":20,"q4":0,"q5":0,"q6":15},"caption":"..."}
+     = the user's REAL robot arm as an interactive 3D model. Degrees: q1 base yaw (-150..150), q2 upper arm lean forward from vertical (-30..90), q3 forearm pitch below horizontal, + = tip down (-70..90, and |q3-q2| <= 70), q4 wrist pitch (-90..90), q5 wrist roll (-90..90), q6 gripper opening (0..30). Use it whenever the user asks to see the arm, a pose, or a reach.
+  {"type":"model","side":"right","title":"...","shapes":[{"shape":"box","size":[40,20,10],"pos":[0,10,0],"rot":[0,0,0],"color":"#c8d3e0"}],"caption":"..."}
+     = any other 3D object built from primitives (mm, y is up): box size [w,h,d], cylinder [r,h], cone [r,h], sphere [r], torus [R,r]; rot in degrees [x,y,z]; up to 40 shapes; colors as #rrggbb.
+  {"type":"images","side":"right","title":"...","queries":["MG996R servo dimensions"]}
+     = buttons that open Google Images in a new tab, when a real photo would help. You cannot see the results; use precise English queries (1 to 3).
+Rules: parts, specs and metrics go "left"; calculations, notes, diagrams, 3D models and image searches go "right". At most one 3D model per reply. Calculations must be correct, with units in every value. Diagram SVGs: only line, rect, circle, ellipse, path, polyline, polygon, text, g; stroke="currentColor" or "#6ab8ff", fill="none" unless a shape must be filled; font-size 10 to 14; keep under 3 KB; label the important dimensions. If the user attached a photo, look at it and answer about it.`;
+
+  // ------------------------------------------------------------------ state
+  const S = { mode: "STANDBY", voiceOn: true, turns: [], busy: false, pulse: 0, speaking: false, mic: 0, micPeak: 0 };
+  const $ = (id) => document.getElementById(id);
+  const modeEl = $("mode"), hint = $("hint"), you = $("you"), ai = $("ai"), note = $("note");
+  const msg = $("msg"), sendBtn = $("sendBtn"), stopBtn = $("stopBtn");
+  const LABEL = { STANDBY: "STANDBY", ONLINE: "ONLINE", LISTENING: "LISTENING", THINKING: "PROCESSING", SPEAKING: "SPEAKING" };
+  function setMode(m) { S.mode = m; modeEl.textContent = LABEL[m]; hint.style.opacity = m === "STANDBY" ? "1" : "0"; }
+
+  // ------------------------------------------------------------------ voice (iPhone built-in TTS)
+  const synth = "speechSynthesis" in window ? window.speechSynthesis : null;
+  let unlocked = false;
+  function unlockSpeech() {             // iOS: the first utterance must start inside a tap
+    if (!synth || unlocked) return;
+    try { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; synth.speak(u); unlocked = true; } catch (e) {}
+  }
+  function pickVoice(ko) {
+    const vs = synth ? synth.getVoices() : [];
+    if (ko) return vs.find((v) => v.lang && v.lang.startsWith("ko")) || null;
+    return vs.find((v) => /Daniel|Arthur|Oliver/.test(v.name)) || vs.find((v) => v.lang === "en-GB")
+      || vs.find((v) => v.lang && v.lang.startsWith("en")) || null;
+  }
+  function speak(text) {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; S.speaking = false; resolve(); } };
+      if (!synth || !S.voiceOn || !text) { finish(); return; }
+      try {
+        synth.cancel();
+        const ko = /[가-힣]/.test(text);
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = ko ? "ko-KR" : "en-GB";
+        const v = pickVoice(ko); if (v) u.voice = v;
+        u.rate = ko ? 1.05 : 1.0; u.pitch = 0.9;
+        u.onstart = () => { S.speaking = true; if (S.mode !== "STANDBY") setMode("SPEAKING"); };
+        u.onboundary = () => { S.pulse = 1; };
+        u.onend = finish; u.onerror = finish;
+        S.speaking = true; if (S.mode !== "STANDBY") setMode("SPEAKING");
+        synth.speak(u);
+        setTimeout(finish, 2500 + text.length * 110);   // safety: some views never fire onend
+      } catch (e) { finish(); }
+    });
+  }
+
+  // ------------------------------------------------------------------ settings (stored only in this browser)
+  const CFG_KEY = "jarvis.settings.v1";
+  const cfg = Object.assign({ provider: "gemini", key: "", model: "", lang: "ko-KR", clap: 0.2, web: true, city: "" },
+    (() => { try { return JSON.parse(localStorage.getItem(CFG_KEY) || "{}"); } catch (e) { return {}; } })());
+  const saveCfg = () => { try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch (e) {} };
+  const setPanel = $("settings"), sProvider = $("sProvider"), sKey = $("sKey"), sModel = $("sModel"), sLang = $("sLang"), sClap = $("sClap"), sHelp = $("sHelp");
+  const HELP = {
+    gemini: 'aistudio.google.com 에서 Google 계정으로 무료 키를 만들 수 있습니다 (<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">키 만들기</a>). 무료 사용량은 하루 횟수 제한이 있습니다.',
+    claude: 'console.anthropic.com 에서 키를 만듭니다 (<a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">키 만들기</a>). 사용한 만큼 요금이 나옵니다.',
+  };
+  function fillSettings() {
+    sProvider.value = cfg.provider; sKey.value = cfg.key; sModel.value = cfg.model; sLang.value = cfg.lang;
+    sClap.value = String(cfg.clap); if (!sClap.value) sClap.value = "0.2";
+    sHelp.innerHTML = HELP[sProvider.value];
+    $("sWeb").value = cfg.web ? "1" : "0"; $("sCity").value = cfg.city || "";
+    renderMemory();
+  }
+  function openSettings() { fillSettings(); setPanel.hidden = false; $("setBtn").setAttribute("aria-pressed", "true"); }
+  function closeSettings() { setPanel.hidden = true; $("setBtn").setAttribute("aria-pressed", "false"); }
+  sProvider.addEventListener("change", () => { sHelp.innerHTML = HELP[sProvider.value]; });
+  $("setBtn").addEventListener("click", () => (setPanel.hidden ? openSettings() : closeSettings()));
+  $("sClose").addEventListener("click", closeSettings);
+  $("sSave").addEventListener("click", () => {
+    const changed = cfg.provider !== sProvider.value || cfg.key !== sKey.value.trim() || cfg.model !== sModel.value.trim();
+    cfg.provider = sProvider.value; cfg.key = sKey.value.trim(); cfg.model = sModel.value.trim();
+    cfg.lang = sLang.value; cfg.clap = parseFloat(sClap.value) || 0.2;
+    cfg.web = $("sWeb").value === "1"; cfg.city = $("sCity").value.trim();
+    if (cfg.city !== (cfg._geoCity || "")) { geo = null; }
+    if (changed) geminiModel = null;
+    saveCfg(); closeSettings(); note.textContent = cfg.key ? "" : ERR.nokey;
+  });
+
+  // ------------------------------------------------------------------ AI engines (Gemini free key / Claude key)
+  const ERR = {
+    nokey: "SET 버튼에서 API 키를 넣어 주세요.",
+    auth: "API 키가 올바르지 않습니다. SET에서 확인해 주세요.",
+    rate: "사용 한도에 도달했습니다. 잠시 후 다시 시도해 주세요.",
+    model: "모델을 찾지 못했습니다. SET의 모델 칸을 비우면 자동으로 고릅니다.",
+    network: "AI 서버에 연결하지 못했습니다. 인터넷 연결을 확인해 주세요.",
+    invalid_json: "응답을 읽지 못했습니다. 다시 말해 주세요.",
+    http: "AI 서버 오류입니다. 다시 시도해 주세요.",
+  };
+  function parseJSON(text) {
+    try { return JSON.parse(text); } catch (e) {}
+    const m = text.match(/```(?:json)?\s*([\s\S]*?)```/); if (m) { try { return JSON.parse(m[1]); } catch (e) {} }
+    const a = text.indexOf("{"), b = text.lastIndexOf("}");
+    if (a >= 0 && b > a) { try { return JSON.parse(text.slice(a, b + 1)); } catch (e) {} }
+    return null;
+  }
+  function httpErr(status, body) {
+    if (status === 401 || status === 403) return { code: "auth" };
+    if (status === 400 && /API key|API_KEY/i.test(body)) return { code: "auth" };
+    if (status === 429) return { code: "rate" };
+    if (status === 404) return { code: "model" };
+    return { code: "http", message: status + " " + body.slice(0, 160) };
+  }
+  let geminiModel = null;
+  async function pickGemini() {
+    if (cfg.model) return cfg.model;
+    if (geminiModel) return geminiModel;
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=" + encodeURIComponent(cfg.key));
+    if (!r.ok) throw httpErr(r.status, await r.text());
+    const j = await r.json();
+    const names = (j.models || []).filter((m) => (m.supportedGenerationMethods || []).includes("generateContent"))
+      .map((m) => String(m.name).replace(/^models\//, ""))
+      .filter((n) => !/image|tts|audio|live|embed|vision|robotics|computer/.test(n));
+    for (const re of [/flash-lite$/, /flash-lite-latest$/, /flash-lite/, /flash$/, /flash/]) {
+      const c = names.filter((n) => re.test(n)).sort().reverse();
+      if (c.length) return (geminiModel = c[0]);
+    }
+    return (geminiModel = names[0] || "gemini-flash-lite-latest");
+  }
+  // ------------------------------------------------------------------ long-term memory (stored only in this browser)
+  const MEM_KEY = "jarvis.memory.v1";
+  const MEM = Object.assign({ facts: [], turns: [], turnsAt: 0 },
+    (() => { try { return JSON.parse(localStorage.getItem(MEM_KEY) || "{}"); } catch (e) { return {}; } })());
+  const saveMem = () => { try { localStorage.setItem(MEM_KEY, JSON.stringify(MEM)); } catch (e) {} };
+  const norm = (t) => String(t).toLowerCase().replace(/[\s.,!?'"()\-]+/g, " ").trim();
+  const BLOCK = /\b(password|passcode|pin|cvv|iban|card number|social security)\b|비밀번호|카드\s?번호|계좌\s?번호|주민\s?번호|여권\s?번호/i;
+  function remember(list) {
+    const added = [];
+    (Array.isArray(list) ? list : []).slice(0, 5).forEach((f) => {
+      const text = String(f || "").trim().slice(0, 200);
+      if (text.length < 4 || BLOCK.test(text)) return;
+      const n = norm(text);
+      if (MEM.facts.some((x) => norm(x.text) === n)) return;
+      MEM.facts.push({ text, t: Date.now() }); added.push(text);
+    });
+    while (MEM.facts.length > 150) MEM.facts.shift();
+    if (added.length) saveMem();
+    return added;
+  }
+  function forget(list) {
+    let n = 0;
+    (Array.isArray(list) ? list : []).slice(0, 10).forEach((q) => {
+      const k = norm(q); if (k.length < 2) return;
+      const before = MEM.facts.length;
+      MEM.facts = MEM.facts.filter((x) => !norm(x.text).includes(k) && !k.includes(norm(x.text)));
+      n += before - MEM.facts.length;
+    });
+    if (n) saveMem();
+    return n;
+  }
+  function renderMemory() {
+    const ul = $("memList"); ul.replaceChildren();
+    $("memCount").textContent = MEM.facts.length + "개";
+    if (!MEM.facts.length) { const li = document.createElement("li"); li.className = "empty"; li.textContent = "아직 기억한 내용이 없습니다. 대화하면서 알게 된 것을 여기에 저장합니다."; ul.append(li); return; }
+    MEM.facts.slice().reverse().forEach((f) => {
+      const li = document.createElement("li"), sp = document.createElement("span"), b = document.createElement("button");
+      sp.textContent = f.text; b.type = "button"; b.textContent = "삭제"; b.setAttribute("aria-label", "이 기억 삭제");
+      b.addEventListener("click", () => { MEM.facts = MEM.facts.filter((x) => x !== f); saveMem(); renderMemory(); });
+      li.append(sp, b); ul.append(li);
+    });
+  }
+  $("memClear").addEventListener("click", (e) => {
+    const b = e.currentTarget;
+    if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "한 번 더 누르면 삭제"; setTimeout(() => { b.dataset.armed = ""; b.textContent = "모두 지우기"; }, 3000); return; }
+    MEM.facts = []; MEM.turns = []; saveMem(); renderMemory(); b.dataset.armed = ""; b.textContent = "모두 지우기";
+  });
+  $("memExport").addEventListener("click", async (e) => {
+    const data = JSON.stringify({ jarvisMemory: 1, facts: MEM.facts });
+    const box = $("memBox");
+    try { await navigator.clipboard.writeText(data); e.currentTarget.textContent = "복사됨"; setTimeout(() => (e.target.textContent = "복사(백업)"), 2000); }
+    catch (err) { box.hidden = false; box.value = data; box.select(); }
+  });
+  $("memImport").addEventListener("click", () => {
+    const box = $("memBox");
+    if (box.hidden || !box.value.trim()) { box.hidden = false; box.value = ""; box.focus(); return; }
+    try { const d = JSON.parse(box.value); remember((d.facts || []).map((f) => (typeof f === "string" ? f : f.text))); box.value = ""; box.hidden = true; renderMemory(); }
+    catch (err) { box.value = ""; box.placeholder = "형식이 맞지 않습니다. 복사(백업)으로 만든 내용을 그대로 붙여 넣어 주세요."; }
+  });
+  function persistTurns() { MEM.turns = S.turns.slice(-12); MEM.turnsAt = Date.now(); saveMem(); }
+  function restoreTurns() {          // continue the last conversation if it was within 6 hours
+    if (MEM.turns && MEM.turns.length && Date.now() - (MEM.turnsAt || 0) < 6 * 3600e3) {
+      S.turns = MEM.turns.slice(); while (S.turns.length && S.turns[0].role !== "user") S.turns.shift();
+      if (S.turns.length && S.turns[S.turns.length - 1].role !== "assistant") S.turns.pop();
+    }
+  }
+
+  // ------------------------------------------------------------------ live data: weather (Open-Meteo, free, no key)
+  const WEATHER_RE = /날씨|기온|온도|비\s?(와|오|올|내)|눈\s?(와|오|올)|우산|미세먼지|바람|더워|추워|weather|temperature|forecast|rain|snow|umbrella/i;
+  const WMO = { 0: "맑음", 1: "대체로 맑음", 2: "구름 조금", 3: "흐림", 45: "안개", 48: "서리 안개", 51: "약한 이슬비", 53: "이슬비", 55: "강한 이슬비",
+    61: "약한 비", 63: "비", 65: "강한 비", 66: "어는 비", 67: "강한 어는 비", 71: "약한 눈", 73: "눈", 75: "강한 눈", 77: "싸락눈",
+    80: "약한 소나기", 81: "소나기", 82: "강한 소나기", 85: "약한 눈 소나기", 86: "강한 눈 소나기", 95: "뇌우", 96: "우박 동반 뇌우", 99: "강한 우박 뇌우" };
+  let geo = null;
+  function getPosition() {
+    return new Promise((res) => {
+      if (!navigator.geolocation) return res(null);
+      navigator.geolocation.getCurrentPosition((p) => res({ lat: p.coords.latitude, lon: p.coords.longitude }), () => res(null), { timeout: 8000, maximumAge: 30 * 60e3 });
+    });
+  }
+  async function locate() {
+    if (geo) return geo;
+    const p = await getPosition();
+    if (p) {
+      let name = "";
+      try {
+        const r = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${p.lat}&longitude=${p.lon}&localityLanguage=ko`);
+        if (r.ok) { const j = await r.json(); name = j.city || j.locality || j.principalSubdivision || ""; }
+      } catch (e) {}
+      return (geo = { lat: p.lat, lon: p.lon, name: name || "현재 위치" });
+    }
+    if (cfg.city) {
+      const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&language=ko&name=${encodeURIComponent(cfg.city)}`);
+      if (r.ok) { const j = await r.json(); const g = j.results && j.results[0]; if (g) { cfg._geoCity = cfg.city; return (geo = { lat: g.latitude, lon: g.longitude, name: g.name }); } }
+    }
+    return null;
+  }
+  async function weatherContext() {
+    try {
+      const g = await locate();
+      if (!g) return "[Weather: the user's location is unknown (no location permission, no home city set). If they ask about local weather, ask which city, or suggest setting a home city in SET.]";
+      const u = `https://api.open-meteo.com/v1/forecast?latitude=${g.lat.toFixed(3)}&longitude=${g.lon.toFixed(3)}&timezone=auto&forecast_days=3`
+        + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m"
+        + "&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max";
+      const r = await fetch(u); if (!r.ok) throw 0;
+      const w = await r.json(), c = w.current, d = w.daily, h = w.hourly;
+      const nowIdx = Math.max(0, h.time.findIndex((t) => t >= c.time));
+      const next = h.time.slice(nowIdx, nowIdx + 12).filter((_, i) => i % 3 === 0)
+        .map((t, k) => `${t.slice(11, 16)} ${Math.round(h.temperature_2m[nowIdx + k * 3])}°C rain ${h.precipitation_probability[nowIdx + k * 3]}% ${WMO[h.weather_code[nowIdx + k * 3]] || ""}`).join("; ");
+      const days = d.time.map((t, i) => `${t}: ${WMO[d.weather_code[i]] || ""}, ${Math.round(d.temperature_2m_min[i])}~${Math.round(d.temperature_2m_max[i])}°C, rain ${d.precipitation_probability_max[i]}%`).join("; ");
+      return `[Live weather for ${g.name} (${w.timezone}), fetched just now from Open-Meteo: now ${Math.round(c.temperature_2m)}°C (feels ${Math.round(c.apparent_temperature)}°C), ${WMO[c.weather_code] || "code " + c.weather_code}, humidity ${c.relative_humidity_2m}%, wind ${Math.round(c.wind_speed_10m)} km/h, precipitation ${c.precipitation} mm. Next hours: ${next}. Daily: ${days}. If the user asked about another city, use web search instead of this data. Show a "metrics" panel titled with the place.]`;
+    } catch (e) { return "[Weather: live weather data could not be fetched right now.]"; }
+  }
+
+  // ------------------------------------------------------------------ system prompt (rules + time + memory)
+  function systemPrompt() {
+    const now = new Date();
+    const when = now.toLocaleString("ko-KR", { dateStyle: "full", timeStyle: "short" }) + " (" + Intl.DateTimeFormat().resolvedOptions().timeZone + ")";
+    const facts = MEM.facts.length ? MEM.facts.map((f) => "- " + f.text).join("\n") : "(nothing yet)";
+    return RULES + `
+
+Current date and time for the user: ${when}.
+
+What you remember about ${USER} from earlier conversations (use naturally when relevant; never recite the list unprompted):
+${facts}
+
+Memory: you learn from the conversation. Add to the JSON reply, when needed:
+  "remember": ["..."]  durable facts about ${USER} that will help later: preferences, projects, decisions, people, routines, things they explicitly ask you to remember. Short, third person, in Korean (e.g. "${USER}는 하이브리드 로봇팔 v0.1을 만들고 있다"). Only what the user said or clearly confirmed. Never passwords, card or account numbers, ID numbers. Omit the field when there is nothing new.
+  "forget": ["..."]    keywords of stored facts to delete when the user asks you to forget something or corrects an old fact (then also "remember" the corrected one).
+${cfg.web ? "Web: you have a web search tool. Use it for news, current events, prices, opening hours, sports, anything after your training data, and for weather in places other than the user's location. For news, put 3 to 5 headlines in a \"note\" panel (one short line each, with the outlet name) and summarize in \"say\". The app shows source links by itself, so do not put URLs in the text." : "Web search is turned off; say so if the user asks about live news."}`;
+  }
+
+  // ------------------------------------------------------------------ AI engines
+  async function askGemini(turns, img, signal, sys, useWeb) {
+    const model = await pickGemini();
+    const contents = turns.map((t) => ({ role: t.role === "assistant" ? "model" : "user", parts: [{ text: t.content }] }));
+    if (img) contents[contents.length - 1].parts.unshift({ inline_data: { mime_type: img.type, data: img.b64 } });
+    const body = { systemInstruction: { parts: [{ text: sys }] }, contents, generationConfig: { temperature: 0.6, maxOutputTokens: 4096 } };
+    if (useWeb) body.tools = [{ google_search: {} }]; else body.generationConfig.responseMimeType = "application/json";
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(cfg.key)}`, {
+      method: "POST", signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const t = await r.text();
+      if (useWeb && r.status === 400 && /google_search|tool|grounding/i.test(t)) return askGemini(turns, img, signal, sys, false);   // model without search
+      throw httpErr(r.status, t);
+    }
+    const j = await r.json(), cand = (j.candidates && j.candidates[0]) || {};
+    const text = ((cand.content && cand.content.parts) || []).map((p) => p.text || "").join("");
+    const chunks = (cand.groundingMetadata && cand.groundingMetadata.groundingChunks) || [];
+    const sources = chunks.map((c) => c.web).filter(Boolean).map((w) => ({ url: w.uri, title: w.title || w.uri }));
+    return { text, sources };
+  }
+  async function askClaude(turns, img, signal, sys, useWeb) {
+    const msgs = turns.map((t) => ({ role: t.role, content: t.content }));
+    if (img) { const last = msgs[msgs.length - 1]; last.content = [{ type: "image", source: { type: "base64", media_type: img.type, data: img.b64 } }, { type: "text", text: last.content }]; }
+    const body = { model: cfg.model || "claude-haiku-5-5", max_tokens: 3000, system: sys, messages: msgs };
+    if (useWeb) body.tools = [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }];
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST", signal,
+      headers: { "content-type": "application/json", "x-api-key": cfg.key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const t = await r.text();
+      if (useWeb && r.status === 400 && /web_search|tool/i.test(t)) return askClaude(turns, img, signal, sys, false);
+      throw httpErr(r.status, t);
+    }
+    const j = await r.json(), blocks = j.content || [];
+    let lastTool = -1; blocks.forEach((b, i) => { if (b.type === "web_search_tool_result") lastTool = i; });
+    const text = blocks.slice(lastTool + 1).filter((b) => b.type === "text").map((b) => b.text).join("");
+    const sources = [];
+    blocks.forEach((b) => (b.citations || []).forEach((c) => c.url && sources.push({ url: c.url, title: c.title || c.url })));
+    if (!sources.length) blocks.filter((b) => b.type === "web_search_tool_result" && Array.isArray(b.content)).forEach((b) => b.content.slice(0, 3).forEach((x) => x.url && sources.push({ url: x.url, title: x.title || x.url })));
+    return { text, sources };
+  }
+  async function askLLM(turns, img, signal) {
+    if (!cfg.key) throw { code: "nokey" };
+    let out;
+    try { out = cfg.provider === "claude" ? await askClaude(turns, img, signal, systemPrompt(), cfg.web) : await askGemini(turns, img, signal, systemPrompt(), cfg.web); }
+    catch (e) {
+      if (e && e.name === "AbortError") throw { code: "cancelled" };
+      if (e && e.code) { if (e.code === "model") geminiModel = null; throw e; }
+      throw { code: "network" };
+    }
+    let obj = parseJSON(out.text || "");
+    if (!obj || typeof obj.say !== "string" || !obj.say.trim()) {
+      const plain = String(out.text || "").replace(/```[\s\S]*?```/g, "").replace(/[#*_`>]/g, "").trim();
+      if (!plain) throw { code: "invalid_json" };
+      obj = { say: plain.slice(0, 600), panels: [] };               // the model answered in plain text (common with web search)
+    }
+    const seen = new Set();
+    obj.sources = (out.sources || []).filter((x) => x.url && !seen.has(x.url) && seen.add(x.url)).slice(0, 5);
+    return obj;
+  }
+
+  // ------------------------------------------------------------------ boot screen (white "(error)" disguise)
+  const boot = $("boot"), dbgEl = $("dbg");
+  let bootState = "shown";                  // shown | opening | gone | closing
+  const bootCovers = () => bootState === "shown";
+  function openBoot() {
+    if (bootState !== "shown") return;
+    bootState = "opening";
+    boot.classList.add("glitch");
+    setTimeout(() => { boot.classList.add("collapse"); setMode("ONLINE"); }, 560);
+    setTimeout(() => { boot.classList.add("gone"); bootState = "gone"; document.querySelector('meta[name="theme-color"]').content = "#02050c"; }, 1560);
+  }
+  function closeBoot() {
+    bootState = "closing";
+    boot.classList.remove("gone", "glitch");
+    boot.classList.add("collapse");
+    void boot.offsetWidth;                  // start from the collapsed point
+    boot.classList.remove("collapse");
+    document.querySelector('meta[name="theme-color"]').content = "#ffffff";
+    setTimeout(() => { bootState = "shown"; }, 1000);
+  }
+
+  // ------------------------------------------------------------------ microphone + double-clap detector
+  const DEBUG = /debug/.test(location.hash + location.search);
+  function dbg(s) { if (DEBUG) { dbgEl.hidden = false; dbgEl.textContent = s; } }
+  let ac = null, micStream = null, proc = null, armed = false;
+  const CL = { noise: 0.005, hist: [], pending: [], claps: [], last: -1, t: 0 };
+  function clapFeed(rms, pk, t) {
+    for (let i = CL.pending.length - 1; i >= 0; i--) {             // a clap must decay fast
+      const c = CL.pending[i], dt = t - c.t;
+      if (dt >= 0.06) c.after = Math.max(c.after, rms);
+      if (dt >= 0.13) { CL.pending.splice(i, 1); if (c.after < Math.max(0.3 * c.rms, 1.6 * c.base)) clapHit(c.t); }
+    }
+    const prev = CL.hist.length ? CL.hist.reduce((a, b) => a + b, 0) / CL.hist.length : rms;
+    const onset = pk > cfg.clap && rms > 6 * CL.noise && rms > 2.2 * prev && t - CL.last > 0.12;
+    if (onset) { CL.pending.push({ t, rms, base: prev, after: 0 }); CL.last = t; }
+    else if (rms < Math.max(CL.noise * 3, 0.02)) CL.noise = 0.995 * CL.noise + 0.005 * Math.max(rms, 1e-4);
+    CL.hist.push(rms); if (CL.hist.length > 6) CL.hist.shift();
+  }
+  function clapHit(t) {
+    CL.claps = CL.claps.filter((c) => t - c < 1.5);
+    const lastC = CL.claps[CL.claps.length - 1];
+    if (lastC !== undefined && t - lastC >= 0.15 && t - lastC <= 0.9) { CL.claps = []; wake(); }
+    else CL.claps.push(t);
+  }
+  async function startClapMic() {
+    if (micStream || !ac) return;
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    const src = ac.createMediaStreamSource(micStream);
+    proc = ac.createScriptProcessor(1024, 1, 1);
+    const mute = ac.createGain(); mute.gain.value = 0;
+    src.connect(proc); proc.connect(mute); mute.connect(ac.destination);
+    const blockDt = 1024 / ac.sampleRate;
+    proc.onaudioprocess = (e) => {
+      const x = e.inputBuffer.getChannelData(0);
+      let s = 0, pk = 0;
+      for (let i = 0; i < x.length; i++) { const v = x[i]; s += v * v; const a = v < 0 ? -v : v; if (a > pk) pk = a; }
+      const rms = Math.sqrt(s / x.length);
+      CL.t += blockDt;
+      S.mic = 0.8 * S.mic + 0.2 * rms; S.micPeak = Math.max(pk, S.micPeak * 0.97);
+      if (S.mode === "STANDBY" && bootState === "shown") clapFeed(rms, pk, CL.t);
+    };
+  }
+  function stopClapMic() {
+    if (proc) { proc.onaudioprocess = null; try { proc.disconnect(); } catch (e) {} proc = null; }
+    if (micStream) { micStream.getTracks().forEach((tr) => tr.stop()); micStream = null; }
+  }
+  let wakeLock = null;
+  async function keepScreenOn() { try { if ("wakeLock" in navigator && document.visibilityState === "visible") wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {} }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && armed) keepScreenOn(); });
+  async function arm(fromGesture) {
+    if (armed) return true;
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state !== "running") { const r = ac.resume(); if (fromGesture) await r; else await Promise.race([r, new Promise((res) => setTimeout(res, 300))]); }
+      if (ac.state !== "running") return false;           // browser wants a tap first
+      await startClapMic();
+      armed = true;
+      if (fromGesture) unlockSpeech();
+      keepScreenOn();
+      return true;
+    } catch (e) { dbg("mic: " + (e && e.name)); return false; }
+  }
+  window.addEventListener("keydown", () => { arm(true); unlockSpeech(); }, { capture: true });
+  // Try to start listening right away; if the browser insists on a tap, the first tap on the white page arms it.
+  arm(false);
+  let lastBootTap = 0;
+  boot.addEventListener("pointerdown", () => {
+    arm(true); unlockSpeech();
+    const now = performance.now();
+    if (now - lastBootTap < 380) { lastBootTap = 0; wake(); } else lastBootTap = now;   // double-tap = backup for claps
+  });
+  if (DEBUG) setInterval(() => dbg(`${armed ? "armed" : "tap to arm"} | ctx ${ac ? ac.state : "-"} | level ${(S.mic * 100).toFixed(1)} | peak ${S.micPeak.toFixed(2)} / clap ${cfg.clap} | noise ${(CL.noise * 100).toFixed(2)}`), 200);
+
+  // ------------------------------------------------------------------ speech recognition (browser built-in)
+  const SRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const talkBtn = $("talkBtn");
+  let rec = null, listening = false, lastRecErr = "", idleSince = 0, autoListen = true;
+  const IDLE_MS = 45000;
+  function startListening() {
+    if (S.mode === "STANDBY" || S.busy || S.speaking || listening) return;
+    if (bootState !== "gone") { setTimeout(startListening, 300); return; }   // wait for the boot transition to finish
+    if (!SRec) { msg.placeholder = "입력하세요 (이 브라우저는 음성 인식 미지원)"; setMode("LISTENING"); return; }
+    if (!autoListen) { talkBtn.hidden = false; setMode("LISTENING"); return; }
+    rec = new SRec(); rec.lang = cfg.lang; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+    let finalText = ""; lastRecErr = ""; listening = true; setMode("LISTENING");
+    rec.onresult = (e) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) { const r = e.results[i]; if (r.isFinal) finalText += r[0].transcript; else interim += r[0].transcript; }
+      you.textContent = "› " + (finalText + interim);
+    };
+    rec.onerror = (e) => { lastRecErr = e.error || ""; };
+    rec.onend = () => {
+      listening = false; rec = null;
+      const text = finalText.trim();
+      if (text) { idleSince = performance.now(); handleUser(text); return; }
+      if (S.mode === "STANDBY" || S.busy || S.speaking) return;
+      if (lastRecErr === "not-allowed" || lastRecErr === "service-not-allowed") { autoListen = false; talkBtn.hidden = false; note.textContent = "TALK 버튼을 눌러 말해 주세요."; return; }
+      if (lastRecErr === "audio-capture" && micStream) { stopClapMic(); setTimeout(startListening, 200); return; }
+      if (lastRecErr === "network") note.textContent = "음성 인식에 인터넷 연결이 필요합니다.";
+      if (performance.now() - idleSince > IDLE_MS) { sleep(""); return; }
+      setTimeout(startListening, lastRecErr === "network" ? 3000 : 250);
+    };
+    try { rec.start(); } catch (e) { listening = false; rec = null; autoListen = false; talkBtn.hidden = false; }
+  }
+  function stopListening() { if (rec) { try { rec.abort(); } catch (e) {} } listening = false; }
+  talkBtn.addEventListener("click", () => { unlockSpeech(); autoListen = true; talkBtn.hidden = true; note.textContent = ""; idleSince = performance.now(); startListening(); autoListen = false; });
+
+  // ------------------------------------------------------------------ flow
+  function wake() {
+    if (S.mode !== "STANDBY" || bootState !== "shown") return;
+    unlockSpeech();
+    idleSince = performance.now();
+    you.textContent = ""; ai.textContent = GREETING; note.textContent = cfg.key ? "" : ERR.nokey;
+    restoreTurns();
+    openBoot();
+    setTimeout(() => speak(GREETING).then(() => {
+      if (S.mode === "STANDBY") return;
+      if (!cfg.key) openSettings();
+      startListening();
+    }), 700);
+  }
+  async function sleep(lastText) {
+    stopListening();
+    const fw = /[가-힣]/.test(lastText || "") || cfg.lang === "ko-KR" ? FAREWELL_KO : FAREWELL_EN;
+    ai.textContent = fw;
+    await speak(fw);
+    persistTurns(); S.turns = []; talkBtn.hidden = true; closeSettings();
+    setMode("STANDBY");
+    closeBoot();
+    CL.claps = []; CL.pending = [];
+    if (armed && !micStream) { try { await startClapMic(); } catch (e) { armed = false; } }
+  }
+  let ctl = null;
+  stopBtn.addEventListener("click", () => { if (ctl) ctl.abort(); if (synth) synth.cancel(); });
+
+  async function handleUser(text) {
+    if (!text || S.busy) return;
+    stopListening();
+    you.textContent = "› " + text;
+    note.textContent = "";
+    if (SLEEP_RE.test(text)) { sleep(text); return; }
+    S.busy = true; sendBtn.disabled = true; stopBtn.hidden = false;
+    setMode("THINKING");
+    ai.textContent = "Thinking...";
+    const img = pendingImg;
+    let content = img ? text + "\n[A photo is attached.]" : text;
+    if (WEATHER_RE.test(text)) { ai.textContent = "Checking the weather..."; content += "\n\n" + await weatherContext(); ai.textContent = "Thinking..."; }
+    S.turns.push({ role: "user", content });
+    while (S.turns.length > 16) S.turns.splice(0, 2);
+    ctl = new AbortController();
+    let answer = "";
+    try {
+      const res = await askLLM(S.turns, img, ctl.signal);
+      answer = res.say.trim();
+      ai.textContent = answer;
+      const panels = Array.isArray(res.panels) ? res.panels.slice(0, 3) : [];
+      if (res.sources && res.sources.length) panels.push({ type: "sources", side: "right", title: "출처", links: res.sources });
+      showPanels(panels);
+      const forgotten = forget(res.forget), added = remember(res.remember);
+      if (added.length || forgotten) note.textContent = (added.length ? "기억함: " + added.join(" / ") : "") + (forgotten ? (added.length ? " · " : "") + `기억 ${forgotten}개 삭제` : "");
+      const titles = Array.isArray(res.panels) ? res.panels.map((p) => p && p.title).filter(Boolean).join(", ") : "";
+      S.turns.push({ role: "assistant", content: answer + (titles ? `\n[Panels shown: ${titles}]` : "") });
+      S.turns.forEach((t) => { if (t.role === "user") t.content = t.content.replace(/\n\n\[(Live weather|Weather:)[\s\S]*$/, ""); });   // do not keep stale weather data in history
+      persistTurns();
+      pendingImg = null; pendingEl.textContent = "";
+    } catch (err) {
+      S.turns.pop();
+      ai.textContent = "";
+      if (!err || err.code !== "cancelled") note.textContent = ERR[err && err.code] || ERR.http;
+      if (err && (err.code === "nokey" || err.code === "auth")) openSettings();
+    } finally {
+      S.busy = false; sendBtn.disabled = false; stopBtn.hidden = true; ctl = null;
+    }
+    if (answer) await speak(answer);
+    idleSince = performance.now();
+    if (S.mode !== "STANDBY") { setMode("LISTENING"); startListening(); }
+  }
+
+  $("bar").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = msg.value.trim();
+    if (!text) return;
+    msg.value = ""; unlockSpeech();
+    if (S.mode === "STANDBY") { wake(); setTimeout(() => handleUser(text), 1800); return; }
+    handleUser(text);
+  });
+  $("voiceBtn").addEventListener("click", (e) => {
+    S.voiceOn = !S.voiceOn;
+    e.currentTarget.setAttribute("aria-pressed", String(S.voiceOn));
+    e.currentTarget.textContent = S.voiceOn ? "VOICE ON" : "VOICE OFF";
+    if (!S.voiceOn && synth) synth.cancel(); else unlockSpeech();
+  });
+
+  // ------------------------------------------------------------------ side panels
+  const sideEl = { L: $("sideL"), R: $("sideR") }, stackEl = { L: $("stackL"), R: $("stackR") }, tabEl = { L: $("tabL"), R: $("tabR") };
+  const wide = () => window.matchMedia("(min-width: 900px)").matches;
+  function refreshSides() {
+    for (const k of ["L", "R"]) {
+      const has = stackEl[k].children.length > 0;
+      sideEl[k].classList.toggle("empty", !has);
+      if (!has) sideEl[k].classList.remove("open");
+      tabEl[k].hidden = wide() || !has || sideEl[k].classList.contains("open");
+    }
+  }
+  function openSide(k) {
+    if (wide()) return;
+    const other = k === "L" ? "R" : "L";
+    sideEl[other].classList.remove("open");
+    sideEl[k].classList.add("open"); refreshSides();
+  }
+  function closeSide(k) { sideEl[k].classList.remove("open"); refreshSides(); }
+  for (const k of ["L", "R"]) tabEl[k].addEventListener("click", () => openSide(k));
+  document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => closeSide(b.dataset.close)));
+  document.querySelectorAll("[data-clear]").forEach((b) => b.addEventListener("click", () => { stackEl[b.dataset.clear].replaceChildren(); refreshSides(); }));
+  window.addEventListener("resize", refreshSides);
+
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = String(text); return e; };
+  const str = (v) => (v == null ? "" : String(v));
+  const SVG_TAGS = new Set(["svg", "g", "line", "rect", "circle", "ellipse", "path", "polyline", "polygon", "text", "tspan", "defs", "marker"]);
+  const SVG_ATTRS = new Set(["viewBox", "xmlns", "width", "height", "x", "y", "x1", "y1", "x2", "y2", "cx", "cy", "r", "rx", "ry", "d", "points",
+    "fill", "stroke", "stroke-width", "stroke-dasharray", "stroke-linecap", "stroke-linejoin", "opacity", "fill-opacity", "font-size", "font-weight",
+    "text-anchor", "dominant-baseline", "transform", "id", "marker-end", "marker-start", "markerWidth", "markerHeight", "refX", "refY", "orient", "dx", "dy"]);
+  function safeSvg(src) {
+    if (typeof src !== "string" || src.length > 20000) return null;
+    let doc;
+    try { doc = new DOMParser().parseFromString(src, "image/svg+xml"); } catch (e) { return null; }
+    const root = doc.documentElement;
+    if (!root || root.nodeName.toLowerCase() !== "svg" || doc.getElementsByTagName("parsererror").length) return null;
+    const walk = (node) => {
+      for (const child of Array.from(node.children)) {
+        if (!SVG_TAGS.has(child.nodeName)) { child.remove(); continue; }
+        walk(child);
+      }
+      for (const a of Array.from(node.attributes)) {
+        const v = a.value || "";
+        if (!SVG_ATTRS.has(a.name) || /url\(|javascript:|expression|@import/i.test(v)) node.removeAttribute(a.name);
+        else if (a.name === "marker-end" || a.name === "marker-start") node.removeAttribute(a.name);
+      }
+    };
+    walk(root);
+    root.removeAttribute("width"); root.removeAttribute("height");
+    if (!root.getAttribute("viewBox")) root.setAttribute("viewBox", "0 0 300 200");
+    return document.importNode(root, true);
+  }
+
+  function renderCard(p, side) {
+    const card = el("article", "card");
+    const top = el("div", "card-top"), info = el("div", "grow");
+    const kind = { parts: "PARTS", metrics: "SPECS", calc: "CALC", note: "NOTE", diagram: "DIAGRAM", image: "PHOTO", model: "3D MODEL", images: "IMAGES", sources: "SOURCES" }[p.type] || "DATA";
+    info.append(el("div", "card-kind", kind), el("h3", "card-title", p.title || ""));
+    const x = el("button", "card-x", "×"); x.type = "button"; x.setAttribute("aria-label", "카드 닫기");
+    x.addEventListener("click", () => { if (p._url) URL.revokeObjectURL(p._url); dropCard(card); refreshSides(); });
+    const tools = el("div", "card-tools");
+    if (p.type === "model") {
+      const ex = el("button", "card-x", "EXPAND"); ex.type = "button";
+      ex.addEventListener("click", () => { const on = card.classList.toggle("expanded"); ex.textContent = on ? "SHRINK" : "EXPAND"; });
+      tools.append(ex);
+    }
+    tools.append(x);
+    top.append(info, tools); card.append(top);
+
+    if (p.type === "parts" && Array.isArray(p.rows)) {
+      const wrap = el("div", "tbl-wrap"), t = el("table");
+      if (Array.isArray(p.columns)) { const tr = el("tr"); p.columns.slice(0, 6).forEach((c) => tr.append(el("th", "", c))); const th = el("thead"); th.append(tr); t.append(th); }
+      const tb = el("tbody");
+      p.rows.slice(0, 40).forEach((r) => { const tr = el("tr"); (Array.isArray(r) ? r : [r]).slice(0, 6).forEach((c) => tr.append(el("td", "", str(c)))); tb.append(tr); });
+      t.append(tb); wrap.append(t); card.append(wrap);
+      if (p.total) card.append(el("div", "total", "TOTAL  " + str(p.total)));
+    } else if (p.type === "metrics" && Array.isArray(p.items)) {
+      const g = el("div", "metrics");
+      p.items.slice(0, 12).forEach((m) => { const d = el("div", "metric"); const v = el("div", "m-v", str(m.value)); if (m.unit) v.append(el("span", "m-u", m.unit)); d.append(el("div", "m-l", m.label), v); g.append(d); });
+      card.append(g);
+    } else if (p.type === "calc") {
+      const st = el("div", "steps");
+      (Array.isArray(p.steps) ? p.steps : []).slice(0, 14).forEach((s2) => {
+        const row = el("div", "step"); row.append(el("span", "lbl", s2.label), el("span", "val", s2.value));
+        if (s2.expr) row.append(el("span", "expr", s2.expr)); st.append(row);
+      });
+      card.append(st);
+      if (p.result) { const r = el("div", "result"); r.append(el("span", "lbl", p.result.label || "Result"), el("span", "val", p.result.value)); card.append(r); }
+    } else if (p.type === "diagram") {
+      const svg = safeSvg(p.svg);
+      const box = el("div", "diagram");
+      if (svg) box.append(svg); else box.append(el("p", "caption", "도식을 그리지 못했습니다."));
+      card.append(box);
+      if (p.caption) card.append(el("p", "caption", p.caption));
+    } else if (p.type === "model") {
+      const box = el("div", "model3d"), status = el("p", "caption", "3D 모델 불러오는 중...");
+      box.append(status); card.append(box);
+      if (p.caption) card.append(el("p", "caption", p.caption));
+      (async () => {
+        try {
+          const THREE = await loadThree();
+          let build;
+          if (p.asset === "arm") { const [data, buf] = await loadArm(); build = (T, root) => buildArm(T, root, data, buf, p.pose); }
+          else build = (T, root) => buildShapes(T, root, p.shapes);
+          if (!card.isConnected) return;
+          status.remove();
+          card._viewer = makeViewer(box, build);
+        } catch (e) { status.textContent = "3D 모델을 불러오지 못했습니다."; }
+      })();
+    } else if (p.type === "sources" && Array.isArray(p.links)) {
+      const list = el("div", "qlist");
+      p.links.slice(0, 5).forEach((lk) => {
+        let host = ""; try { host = new URL(lk.url).hostname.replace(/^www\./, ""); } catch (e) { return; }
+        if (!/^https?:/.test(lk.url)) return;
+        const a = el("a", "qbtn"); a.href = lk.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+        a.append(el("span", "q-l", host.toUpperCase()), el("span", "q-t", lk.title)); list.append(a);
+      });
+      card.append(list);
+    } else if (p.type === "images") {
+      const list = el("div", "qlist");
+      (Array.isArray(p.queries) ? p.queries : []).slice(0, 4).forEach((q) => {
+        const a = el("a", "qbtn"); a.href = "https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(str(q));
+        a.target = "_blank"; a.rel = "noopener"; a.append(el("span", "q-l", "GOOGLE IMAGES"), el("span", "q-t", q)); list.append(a);
+      });
+      card.append(list, el("p", "caption", "새 탭에서 열립니다."));
+    } else if (p.type === "image" && p._url) {
+      const img = el("img"); img.src = p._url; img.alt = p.title || "첨부 사진"; card.append(img);
+      if (p.caption) card.append(el("p", "caption", p.caption));
+    } else {
+      const ul = el("ul");
+      (Array.isArray(p.bullets) ? p.bullets : [p.text || ""]).slice(0, 12).forEach((b) => ul.append(el("li", "", b)));
+      card.append(ul);
+    }
+    stackEl[side].prepend(card);
+    while (stackEl[side].children.length > 8) dropCard(stackEl[side].lastElementChild);
+  }
+  function showPanels(panels) {
+    if (!Array.isArray(panels) || !panels.length) return;
+    let first = null;
+    panels.slice(0, 4).reverse().forEach((p) => {      // reversed so the first panel ends up on top
+      if (!p || typeof p !== "object") return;
+      const leftTypes = ["parts", "metrics"];
+      const side = p.side === "left" ? "L" : p.side === "right" ? "R" : (leftTypes.includes(p.type) ? "L" : "R");
+      renderCard(p, side); first = first || side;
+      tabEl[side].classList.remove("pulse"); void tabEl[side].offsetWidth; tabEl[side].classList.add("pulse");
+    });
+    refreshSides();
+    if (first) openSide(first);
+  }
+
+
+  // ------------------------------------------------------------------ 3D models (three.js, loaded on demand)
+  function dropCard(card) { if (card && card._viewer) card._viewer.dispose(false); if (card) card.remove(); }
+  let threeP = null;
+  function loadThree() {
+    if (window.THREE) return Promise.resolve(window.THREE);
+    if (!threeP) threeP = new Promise((res, rej) => {
+      const sc = document.createElement("script");
+      sc.src = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
+      sc.onload = () => (window.THREE ? res(window.THREE) : rej(new Error("three")));
+      sc.onerror = () => { threeP = null; rej(new Error("three")); };
+      document.head.appendChild(sc);
+    });
+    return threeP;
+  }
+  let armP = null;
+  function loadArm() {
+    if (!armP) armP = Promise.all([
+      fetch("arm.json").then((r) => { if (!r.ok) throw new Error("arm.json"); return r.json(); }),
+      fetch("arm.bin").then((r) => { if (!r.ok) throw new Error("arm.bin"); return r.arrayBuffer(); }),
+    ]).catch((e) => { armP = null; throw e; });
+    return armP;
+  }
+  const viewers = [];
+  function makeViewer(box, build) {
+    const T = window.THREE;
+    const canvas = document.createElement("canvas"); box.append(canvas);
+    const renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputEncoding = T.sRGBEncoding;
+    const scene = new T.Scene();
+    const cam = new T.PerspectiveCamera(35, 1, 1, 50000);
+    scene.add(new T.HemisphereLight(0xd6ecff, 0x0b1a33, 1.0));
+    const key = new T.DirectionalLight(0xffffff, 0.9); key.position.set(1, 2, 1.4); scene.add(key);
+    const rim = new T.DirectionalLight(0x6ab8ff, 0.5); rim.position.set(-1.5, 0.5, -1); scene.add(rim);
+    const root = new T.Group(); scene.add(root);
+    const api = build(T, root) || {};
+    const bb = new T.Box3().setFromObject(root), c = bb.getCenter(new T.Vector3()), radius = Math.max(bb.getSize(new T.Vector3()).length() / 2, 1);
+    let yaw = 0.7, pitch = 0.32, dist = radius * 2.9, auto = true;
+    const ptrs = new Map(); let pinch0 = 0, dist0 = dist;
+    canvas.addEventListener("pointerdown", (e) => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); auto = false;
+      if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); dist0 = dist; } });
+    canvas.addEventListener("pointermove", (e) => {
+      if (!ptrs.has(e.pointerId)) return;
+      const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+      if (ptrs.size === 1) { yaw -= (e.clientX - prev[0]) * 0.01; pitch = Math.max(-1.2, Math.min(1.4, pitch + (e.clientY - prev[1]) * 0.01)); }
+      else if (ptrs.size === 2 && pinch0) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); dist = Math.max(radius * 1.2, Math.min(radius * 8, dist0 * pinch0 / Math.max(d, 1))); }
+    });
+    const up = (e) => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = 0; };
+    canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
+    canvas.addEventListener("wheel", (e) => { e.preventDefault(); dist = Math.max(radius * 1.2, Math.min(radius * 8, dist * (1 + Math.sign(e.deltaY) * 0.1))); }, { passive: false });
+    const resize = () => { const w = box.clientWidth || 300, h = box.clientHeight || 230; renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); };
+    const ro = new ResizeObserver(resize); ro.observe(box); resize();
+    let raf = 0, last = performance.now(), alive = true;
+    const loop = (now) => {
+      if (!alive) return;
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      if (auto && !reduce) yaw += dt * 0.3;
+      if (api.animate) api.animate(dt);
+      cam.position.set(c.x + dist * Math.cos(pitch) * Math.sin(yaw), c.y + dist * Math.sin(pitch), c.z + dist * Math.cos(pitch) * Math.cos(yaw));
+      cam.lookAt(c); renderer.render(scene, cam);
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    const v = {
+      dispose(snapshot) {
+        if (!alive) return; alive = false; cancelAnimationFrame(raf); ro.disconnect();
+        if (snapshot) { try { const img = new Image(); img.src = canvas.toDataURL("image/png"); img.alt = "3D 모델 정지 화면"; box.replaceChildren(img, el("p", "caption", "정지됨 · 새 모델이 열려 있습니다")); } catch (e) {} }
+        renderer.dispose(); try { renderer.forceContextLoss(); } catch (e) {}
+        const i = viewers.indexOf(v); if (i >= 0) viewers.splice(i, 1);
+      },
+    };
+    viewers.push(v);
+    while (viewers.length > 2) viewers[0].dispose(true);   // phones allow only a few live 3D views
+    return v;
+  }
+  const HEX = (h, d) => (typeof h === "string" && /^#[0-9a-f]{6}$/i.test(h) ? h : d);
+  function buildShapes(T, root, shapes) {
+    const list = Array.isArray(shapes) ? shapes.slice(0, 40) : [];
+    const num = (v, d) => (Number.isFinite(+v) ? +v : d);
+    list.forEach((sh) => {
+      if (!sh || typeof sh !== "object") return;
+      const z = Array.isArray(sh.size) ? sh.size.map((v) => Math.max(0.01, Math.min(5000, num(v, 10)))) : [10, 10, 10];
+      let g;
+      switch (sh.shape) {
+        case "cylinder": g = new T.CylinderGeometry(z[0], z[0], z[1] ?? z[0] * 2, 40); break;
+        case "cone": g = new T.ConeGeometry(z[0], z[1] ?? z[0] * 2, 40); break;
+        case "sphere": g = new T.SphereGeometry(z[0], 32, 20); break;
+        case "torus": g = new T.TorusGeometry(z[0], z[1] ?? z[0] / 4, 20, 48); break;
+        default: g = new T.BoxGeometry(z[0], z[1] ?? z[0], z[2] ?? z[0]);
+      }
+      const m = new T.Mesh(g, new T.MeshStandardMaterial({ color: HEX(sh.color, "#c8d3e0"), roughness: 0.55, metalness: 0.15, flatShading: true }));
+      const pz = Array.isArray(sh.pos) ? sh.pos : [0, 0, 0], r = Array.isArray(sh.rot) ? sh.rot : [0, 0, 0];
+      m.position.set(num(pz[0], 0), num(pz[1], 0), num(pz[2], 0));
+      m.rotation.set(num(r[0], 0) * Math.PI / 180, num(r[1], 0) * Math.PI / 180, num(r[2], 0) * Math.PI / 180);
+      root.add(m);
+    });
+    if (!root.children.length) root.add(new T.Mesh(new T.BoxGeometry(10, 10, 10), new T.MeshStandardMaterial({ color: "#c8d3e0" })));
+    return {};
+  }
+  function buildArm(T, root, data, buf, pose) {
+    const V = new Float32Array(buf, 0, data.vertFloats), I = new Uint32Array(buf, data.vertFloats * 4);
+    const world = new T.Group(); world.rotation.x = -Math.PI / 2; root.add(world);     // model is z-up
+    const pv = data.pivots, G = {};
+    const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    const mk = (name, parent, pos) => { const g = new T.Group(); g.position.set(pos[0], pos[1], pos[2]); parent.add(g); G[name] = g; };
+    mk("base", world, pv.base); mk("yaw", world, pv.yaw);
+    mk("shoulder", G.yaw, pv.shoulder); mk("elbowgear", G.yaw, pv.elbowgear); mk("rod", G.yaw, pv.rod); mk("forearm", G.yaw, pv.forearm);
+    mk("bracket", G.forearm, sub(pv.bracket, pv.forearm)); mk("gripper", G.bracket, sub(pv.gripper, pv.bracket));
+    mk("jawA", G.gripper, sub(pv.jawA, pv.gripper)); mk("jawB", G.gripper, sub(pv.jawB, pv.gripper));
+    const mats = {};
+    data.parts.forEach((p) => {
+      const geo = new T.BufferGeometry();
+      geo.setAttribute("position", new T.BufferAttribute(V.slice(p.v[0] * 3, (p.v[0] + p.v[1]) * 3), 3));
+      geo.setIndex(new T.BufferAttribute(I.slice(p.i[0], p.i[0] + p.i[1]), 1));
+      geo.computeVertexNormals();
+      const mat = mats[p.color] || (mats[p.color] = new T.MeshStandardMaterial({ color: p.color, roughness: p.color === "#30343c" ? 0.4 : 0.6, metalness: p.color === "#30343c" ? 0.5 : 0.08, flatShading: true }));
+      G[p.group].add(new T.Mesh(geo, mat));
+    });
+    const L = data.limits, R = Math.PI / 180;
+    const clamp = (v, lim) => Math.max(lim[0], Math.min(lim[1], Number.isFinite(+v) ? +v : 0));
+    const target = { q1: 0, q2: 0, q3: 0, q4: 0, q5: 0, q6: 10 }, cur = { q1: 0, q2: 0, q3: 0, q4: 0, q5: 0, q6: 10 };
+    const p0 = pose && typeof pose === "object" ? pose : {};
+    for (const k of Object.keys(target)) target[k] = clamp(p0[k] ?? target[k], L[k]);
+    if (Math.abs(target.q3 - target.q2) > 70) target.q3 = target.q2 + Math.sign(target.q3 - target.q2) * 70;
+    const apply = () => {
+      const q2 = cur.q2 * R, q3 = cur.q3 * R;
+      G.yaw.rotation.z = cur.q1 * R;
+      G.shoulder.rotation.y = q2; G.elbowgear.rotation.y = q3;
+      G.rod.position.set(-data.crank * Math.cos(q3), 0, data.shoulder + data.crank * Math.sin(q3)); G.rod.rotation.y = q2;
+      G.forearm.position.set(data.upper * Math.sin(q2), 0, data.shoulder + data.upper * Math.cos(q2)); G.forearm.rotation.y = q3;
+      G.bracket.rotation.y = cur.q4 * R; G.gripper.rotation.x = cur.q5 * R;
+      G.jawA.rotation.z = cur.q6 * R; G.jawB.rotation.z = -cur.q6 * R;
+    };
+    apply();
+    let t = 0;
+    return { animate(dt) { t += dt; if (t < 0.5) return; const k = Math.min(1, dt * 2.2); let moving = false;
+      for (const q of Object.keys(cur)) { const d = target[q] - cur[q]; if (Math.abs(d) > 0.05) { cur[q] += d * k; moving = true; } }
+      if (moving) apply(); } };
+  }
+
+
+  // ------------------------------------------------------------------ photo attach (downscaled JPEG, sent with the next message)
+  const attachBtn = $("attachBtn"), photo = $("photo"), pendingEl = $("pending");
+  let pendingImg = null;
+  attachBtn.addEventListener("click", () => photo.click());
+  photo.addEventListener("change", async () => {
+    const f = photo.files && photo.files[0]; photo.value = "";
+    if (!f) return;
+    try {
+      const url = URL.createObjectURL(f);
+      const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+      const k = Math.min(1, 1280 / Math.max(im.naturalWidth, im.naturalHeight));
+      const c = document.createElement("canvas"); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+      c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+      pendingImg = { type: "image/jpeg", b64: c.toDataURL("image/jpeg", 0.85).split(",")[1] };
+      renderCard({ type: "image", title: f.name || "첨부 사진", caption: "다음 메시지와 함께 JARVIS에게 보냅니다.", _url: url }, "R");
+      refreshSides(); openSide("R");
+      pendingEl.textContent = "사진 1장 첨부됨";
+    } catch (e) { note.textContent = "사진을 읽지 못했습니다."; }
+  });
+
+  // ------------------------------------------------------------------ particle atom
+  const cv = $("atom"), ctx = cv.getContext("2d");
+  let W = 0, H = 0, DPR = 1;
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener("resize", resize); resize();
+
+  let lastTap = 0;
+  cv.addEventListener("pointerdown", () => {
+    const now = performance.now();
+    if (now - lastTap < 380) { wake(); lastTap = 0; } else lastTap = now;
+  });
+  window.addEventListener("keydown", (e) => { if (e.key === " " && document.activeElement !== msg) { e.preventDefault(); wake(); } });
+
+  function sprite(r, rgb) {
+    const c = document.createElement("canvas"); c.width = c.height = r * 2 + 2;
+    const g = c.getContext("2d"), gr = g.createRadialGradient(r + 1, r + 1, 0, r + 1, r + 1, r);
+    gr.addColorStop(0, `rgba(${rgb},1)`); gr.addColorStop(0.35, `rgba(${rgb},0.55)`); gr.addColorStop(1, `rgba(${rgb},0)`);
+    g.fillStyle = gr; g.fillRect(0, 0, c.width, c.height); return c;
+  }
+  const BLUE = "70,165,255", CYAN = "150,228,255";
+  const SP = { s: [2, 3, 4, 5].map((r) => sprite(r, BLUE)), c: [3, 5, 7].map((r) => sprite(r, CYAN)), e: sprite(13, CYAN), core: sprite(130, "30,95,210") };
+
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const gauss = () => Math.sqrt(-2 * Math.log(rnd() + 1e-9)) * Math.cos(2 * Math.PI * rnd());
+  const NUC = [], RINGS = [], DUST = [];
+  for (let i = 0; i < 420; i++) {
+    let x = gauss(), y = gauss(), z = gauss(); const n = Math.hypot(x, y, z) || 1, r = Math.pow(rnd(), 0.6) * 70;
+    NUC.push([x / n * r, y / n * r, z / n * r, rnd() * 6.28]);
+  }
+  [[65, 0], [65, 60], [65, 120]].forEach(([tilt, yaw], k) => {
+    const pts = [];
+    for (let i = 0; i < 110; i++) pts.push([i / 110 * 6.283 + rnd() * 0.02, gauss() * 4, gauss() * 4, gauss() * 4]);
+    RINGS.push({ pts, tilt: tilt * Math.PI / 180, yaw: yaw * Math.PI / 180, r: 230 + 12 * k, speed: 0.35 + 0.12 * k, phase: 0 });
+  });
+  for (let i = 0; i < 240; i++) DUST.push([(rnd() * 2 - 1) * 520, (rnd() * 2 - 1) * 340, (rnd() * 2 - 1) * 420, gauss() * 6, gauss() * 6, gauss() * 6]);
+
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let energy = 0.22, rot = 0, t = 0, prev = performance.now();
+  const out = [0, 0, 0];
+  function rotate(x, y, z, ax, ay) {
+    const ca = Math.cos(ax), sa = Math.sin(ax), cb = Math.cos(ay), sb = Math.sin(ay);
+    const y1 = y * ca - z * sa, z1 = y * sa + z * ca;
+    out[0] = x * cb + z1 * sb; out[1] = y1; out[2] = -x * sb + z1 * cb; return out;
+  }
+
+  function frame(now) {
+    const dt = Math.min(0.05, (now - prev) / 1000); prev = now; t += dt;
+    if (bootCovers()) { requestAnimationFrame(frame); return; }      // save battery behind the white screen
+    const target = { STANDBY: 0.22, ONLINE: 1, LISTENING: 0.85, THINKING: 0.95, SPEAKING: 1 }[S.mode];
+    energy += (target - energy) * Math.min(1, dt * 2.5);
+    const thinking = S.mode === "THINKING";
+    const k = reduce ? 0.3 : 1;
+    rot += dt * k * (0.08 + 0.25 * energy + (thinking ? 0.9 : 0));
+    RINGS.forEach((r) => { r.phase += dt * k * r.speed * (0.4 + 1.6 * energy) * (thinking ? 2.2 : 1); });
+    DUST.forEach((d) => {
+      d[0] += d[3] * dt; d[1] += d[4] * dt; d[2] += d[5] * dt;
+      if (Math.abs(d[0]) > 560) d[3] *= -1; if (Math.abs(d[1]) > 380) d[4] *= -1; if (Math.abs(d[2]) > 460) d[5] *= -1;
+    });
+    S.pulse *= Math.pow(0.02, dt);
+    const p = S.speaking ? Math.min(1, 0.35 + 0.25 * Math.sin(t * 9) * Math.sin(t * 3.7) + 0.5 * S.pulse) : 0;
+
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "#02050c"; ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = "lighter";
+    const cx = W / 2, cy = H * (W < 700 ? 0.4 : 0.44), sc = Math.min(W, H * 0.85) / 760;
+    const F = 900, CAM = 1000, tiltX = 0.35 + 0.08 * Math.sin(t * 0.3);
+    const proj = (x, y, z) => { const q = rotate(x, y, z, tiltX, rot); const kk = F / (q[2] + CAM) * sc; return [cx + q[0] * kk, cy - q[1] * kk, kk]; };
+
+    const gs = 250 * sc * (1 + 0.35 * p);
+    ctx.globalAlpha = 0.35 + 0.5 * energy;
+    ctx.drawImage(SP.core, cx - gs, cy - gs, gs * 2, gs * 2);
+    ctx.globalAlpha = 1;
+
+    const nucS = energy > 0.5 ? SP.c : SP.s;
+    for (const n of NUC) {
+      const b = 1 + 0.04 * Math.sin(t * 1.5 + n[3]) + 0.45 * p;
+      const [x, y, kk] = proj(n[0] * b, n[1] * b, n[2] * b);
+      const s = nucS[Math.min(nucS.length - 1, (kk * 1.6) | 0)];
+      ctx.drawImage(s, x - s.width / 2, y - s.height / 2);
+    }
+    RINGS.forEach((r, i) => {
+      const nVis = (r.pts.length * (0.35 + 0.65 * energy)) | 0;
+      for (let j = 0; j < nVis; j++) {
+        const pt = r.pts[j], a = pt[0] + r.phase;
+        const loc = rotate(Math.cos(a) * r.r + pt[1], Math.sin(a) * r.r + pt[2], pt[3], r.tilt, r.yaw);
+        const [x, y, kk] = proj(loc[0], loc[1], loc[2]);
+        const s = SP.s[Math.min(3, (kk * 2.6) | 0)];
+        ctx.drawImage(s, x - s.width / 2, y - s.height / 2);
+      }
+      for (let j = 0; j < 6; j++) {
+        if (energy <= 0.3 && j > 0) break;
+        const te = r.phase * 2 + i * 2.1 - j * 0.05;
+        const loc = rotate(Math.cos(te) * r.r, Math.sin(te) * r.r, 0, r.tilt, r.yaw);
+        const [x, y] = proj(loc[0], loc[1], loc[2]);
+        const s = j === 0 ? SP.e : SP.c[Math.max(0, 2 - (j >> 1))];
+        ctx.drawImage(s, x - s.width / 2, y - s.height / 2);
+      }
+    });
+    const nDust = (DUST.length * (0.3 + 0.7 * energy)) | 0;
+    for (let i = 0; i < nDust; i++) {
+      const d = DUST[i]; const [x, y] = proj(d[0], d[1], d[2]);
+      ctx.drawImage(SP.s[0], x - 3, y - 3);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
